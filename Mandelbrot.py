@@ -58,7 +58,7 @@ def on_key_press(symb, modif):
         y2 = y2Int
         batch = pyglet.graphics.Batch()
 
-        '''if __name__ == '__main__':
+        if __name__ == '__main__':
             p0 = np.newProcess(x1, x2, y1, y2, batch, w, h, 0)
             p1 = np.newProcess(x1, x2, y1, y2, batch, w, h, 1)
             p2 = np.newProcess(x1, x2, y1, y2, batch, w, h, 2)
@@ -73,16 +73,16 @@ def on_key_press(symb, modif):
             p0.join
             p1.join
             p2.join
-            p3.join'''
+            p3.join
         
             
-        for pX in range(0, w):
-            print('progress: ', round((pX/w)*100, 1), '%')
-            for pY in range(0, h):
-                computeTime = process_time()
-                col = int(computeSet(pX, pY, x1, x2, y1, y2))
-                computeTime = process_time() - computeTime
-                batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))   
+        # for pX in range(0, w):
+        #     print('progress: ', round((pX/w)*100, 1), '%')
+        #     for pY in range(0, h):
+        #         computeTime = process_time()
+        #         col = int(computeSet(pX, pY, x1, x2, y1, y2))
+        #         computeTime = process_time() - computeTime
+        #         batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))   
 
 
         batch.draw()
