@@ -6,13 +6,13 @@ from pyglet import image as ImagePyglet
 import pyglet
 from PIL import Image
 import numpy
+import time
 
 def newMap(rangeLow, rangeHigh, newRangeLow, newRangeHigh, measure):
     num = ((measure-rangeLow)/(rangeHigh-rangeLow))*(newRangeHigh-newRangeLow)+newRangeLow
     return num
 
 def computeSet(pX, pY, limX1, limX2, limY1, limY2):
-    #c = complex(newMap(0, w, -2.00, 0.47, pX), newMap(0, h, -1.12, 1.12, pY))
     c = complex(newMap(0, w, limX1, limX2, pX), newMap(0, h, limY1, limY2, pY))
     complexFunc = lambda z : z**2 + c
     res = 0 
@@ -24,55 +24,75 @@ def computeSet(pX, pY, limX1, limX2, limY1, limY2):
     color = newMap(0, iterMax, 0, 255, iteration)
     return color
 
-def runSubset(xSubset, qu):
+def runSubset(xSubset, qu, x1, x2, y1, y2):
     processTime = process_time()
+    arr = numpy.zeros((h, int(w/NUM_PROCESSES), 3), dtype=numpy.uint8)
     for pX in range(int(((xSubset*w)/NUM_PROCESSES)), int(((xSubset+1)*w)/NUM_PROCESSES)):
         for pY in range(0, h):
             col = int(computeSet(pX, pY, x1, x2, y1, y2))
-            #arr.append((pX, pY, col))
-            #batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))
-            qu.put([pX, pY, col])
+            arr[pY, int(newMap(int(((xSubset*w)/NUM_PROCESSES)), int(((xSubset+1)*w)/NUM_PROCESSES), 0, w/NUM_PROCESSES, pX))] = [abs(col-255), 20, 20]
+    qu.put([arr, xSubset])
     processTime = process_time()-processTime
     print('Process', xSubset, ':', processTime)
 
 def multiProcess():
-    time = process_time()
-    
+    start = time.time()
+    global imageArray
+    arrStorage = [*range(NUM_PROCESSES)]
     q = mp.JoinableQueue()
     processes = []
-    count = 0
+
     for a in range(0, NUM_PROCESSES):
-        p = mp.Process(target=runSubset, args=(a, q))
-        p.daemon = True
+        p = mp.Process(target=runSubset, args=(a, q, x1, x2, y1, y2))
         processes.append(p)
         p.start()
-    time2 = process_time()
-    for p in range(w * h):
+    time2 = time.time()
+    for p in range(NUM_PROCESSES):
+        #Take each array slice from queue and store them in appropriate order in arrStorage
         val = q.get()
         q.task_done()
-        #val(1) = y, val(0) = x, val(2) = color
-        d[val[1], val[0]] = [abs(val[2]-255), 20, 20]
-    time2 = process_time() - time2
+        arrStorage[val[1]] = val[0]
+    time2 = time.time() - time2
     for p in processes:
+        #Wait for processes to catch up and terminate when complete
         p.join()
         p.terminate()
-    time = process_time() - time
-    print('time for every multiprocessing thing: ', time)
+    for s in arrStorage:
+        #Concatenate all arrays in order which they appear in arrStorage
+        
+        imageArray = numpy.concatenate((imageArray, s), axis=1)
+
+    start = time.time() - start
+    print('time for every multiprocessing thing: ', start)
     print('time to process queue:', time2)
 
+def processImage():
+            #Saves array d to tempImage using Pillow's .fromarray   
+            global imageArray 
+            tempImage = Image.fromarray(imageArray, mode='RGB')
+
+            #Turns tempImage to bytes
+            raw = tempImage.tobytes()
+
+            #Turns raw into a pyglet image and displays
+            window.clear()
+            image = ImagePyglet.ImageData(tempImage.width, tempImage.height, 'RGB', raw)
+            image.blit(0, 0, 0)
+            
+            imageArray = numpy.zeros((h, 0, 3), dtype=numpy.uint8)
 
 
 
 
-w = 1000
-h = 1000
+
+w = 500
+h = 500
 x1 = -2.00
 x2 = 0.47
 y1 = -1.12
 y2 = 1.12
-NUM_PROCESSES = 4
-q = mp.Array('d', 0)
-d = numpy.zeros((h, w, 3), dtype=numpy.uint8)
+NUM_PROCESSES = 8
+imageArray = numpy.zeros((h, 0, 3), dtype=numpy.uint8)
 x1Int = x1
 x2Int = x2
 y1Int = y1
@@ -82,13 +102,15 @@ if __name__ == '__main__':
     window = pyglet.window.Window()
     window.set_size(w, h)
 
+
+    # @window.on_show
+    # def on_show():
+    #     multiProcess()
+    #     processImage()
+
     @window.event
     def on_draw():
-        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1-crosshairLength, y1, x1+crosshairLength, y2)))
-        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1, y1-crosshairLength, x1, y1+crosshairLength)))
         pass
-        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2-crosshairLength, y2, x2+crosshairLength, y2)))
-        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2, y2-crosshairLength, x2, y2+crosshairLength)))
 
 
     @window.event
@@ -98,68 +120,16 @@ if __name__ == '__main__':
         global x2
         global y2
         if(chr(symb) == 'q'):
-            timeStart = process_time()
+            #sets function limits according to chosen zoom window
             x1 = x1Int
             y1 = y1Int
             x2 = x2Int
             y2 = y2Int
-            batch = pyglet.graphics.Batch()
 
-            if __name__ == '__main__':
-                # with mp.Pool(processes=NUM_PROCESSES) as p:
-                #     p.map(runSubset, (1, q))
-
-                multiProcess()
+            multiProcess()
+            processImage()
 
 
-                # p0 = mp.Process(target=runSubset(batch, 0))
-                # #p1 = mp.Process(target=runSubset(batch, 1))
-                # #p2 = mp.Process(target=runSubset(batch, 2))
-                # #p3 = mp.Process(target=runSubset(batch, 3))
-
-                # p0.daemon = True
-                # #p1.daemon = True
-                # #p2.daemon = True
-                # #p3.daemon = True
-
-                # p0.start()
-                # #p1.start()
-                # #p2.start()
-                # #p3.start()
-
-                # p0.join()
-                # #p1.join()
-                # #p2.join()
-                # #p3.join()
-
-                # p0.terminate()
-                # #p1.terminate()
-                # #p2.terminate()
-                # #p3.terminate()
-                
-                print(len(q))
-                for a in range(len(q)):
-                    x = q[a][0]
-                    y = q[a][1]
-                    col = q[a][2]
-                    #batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (x, y)), ('c3B', (col-255),20,20))
-                    d[y, x] = [abs(col-255), 20, 20]
-                tempImage = Image.fromarray(d, mode='RGB')
-                
-                raw = tempImage.tobytes()
-                image = ImagePyglet.ImageData(tempImage.width, tempImage.height, 'RGB', raw)
-                image.blit(0, 0, 0)
-            '''for pX in range(0, w):
-                print('progress: ', round((pX/w)*100, 1), '%')
-                for pY in range(0, h):
-                    computeTime = process_time()
-                    col = int(computeSet(pX, pY, x1, x2, y1, y2))
-                    computeTime = process_time() - computeTime
-                    batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))'''
-            #batch.draw()
-            timeEnd = process_time() - timeStart
-            print('Elapsed time: ', timeEnd)
-            #print('Elapsed time for computation: ', sumSetComputeTime)
     @window.event
     def on_mouse_press(x, y, button, modif):
         global x1Int
