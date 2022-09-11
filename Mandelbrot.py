@@ -1,3 +1,4 @@
+from array import ArrayType
 from time import process_time
 import multiprocessing as mp
 import newProcess as np
@@ -23,26 +24,54 @@ def computeSet(pX, pY, limX1, limX2, limY1, limY2):
     color = newMap(0, iterMax, 0, 255, iteration)
     return color
 
-def runSubset(batch, xSubset):
+def runSubset(xSubset, qu):
     processTime = process_time()
     for pX in range(int(((xSubset*w)/NUM_PROCESSES)), int(((xSubset+1)*w)/NUM_PROCESSES)):
         for pY in range(0, h):
             col = int(computeSet(pX, pY, x1, x2, y1, y2))
             #arr.append((pX, pY, col))
             #batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))
-            q.append((pX, pY, col))
+            qu.put([pX, pY, col])
     processTime = process_time()-processTime
     print('Process', xSubset, ':', processTime)
 
+def multiProcess():
+    time = process_time()
+    
+    q = mp.JoinableQueue()
+    processes = []
+    count = 0
+    for a in range(0, NUM_PROCESSES):
+        p = mp.Process(target=runSubset, args=(a, q))
+        p.daemon = True
+        processes.append(p)
+        p.start()
+    time2 = process_time()
+    for p in range(w * h):
+        val = q.get()
+        q.task_done()
+        #val(1) = y, val(0) = x, val(2) = color
+        d[val[1], val[0]] = [abs(val[2]-255), 20, 20]
+    time2 = process_time() - time2
+    for p in processes:
+        p.join()
+        p.terminate()
+    time = process_time() - time
+    print('time for every multiprocessing thing: ', time)
+    print('time to process queue:', time2)
 
-w = 500
-h = 500
+
+
+
+
+w = 1000
+h = 1000
 x1 = -2.00
 x2 = 0.47
 y1 = -1.12
 y2 = 1.12
-NUM_PROCESSES = 1
-q = []
+NUM_PROCESSES = 4
+q = mp.Array('d', 0)
 d = numpy.zeros((h, w, 3), dtype=numpy.uint8)
 x1Int = x1
 x2Int = x2
@@ -77,33 +106,36 @@ if __name__ == '__main__':
             batch = pyglet.graphics.Batch()
 
             if __name__ == '__main__':
-                '''with mp.Pool(processes=NUM_PROCESSES) as p:
-                    p.map(runSubset, range(NUM_PROCESSES))'''
+                # with mp.Pool(processes=NUM_PROCESSES) as p:
+                #     p.map(runSubset, (1, q))
 
-                p0 = mp.Process(target=runSubset(batch, 0))
-                #p1 = mp.Process(target=runSubset(batch, 1))
-                #p2 = mp.Process(target=runSubset(batch, 2))
-                #p3 = mp.Process(target=runSubset(batch, 3))
+                multiProcess()
 
-                p0.daemon = True
-                #p1.daemon = True
-                #p2.daemon = True
-                #p3.daemon = True
 
-                p0.start()
-                #p1.start()
-                #p2.start()
-                #p3.start()
+                # p0 = mp.Process(target=runSubset(batch, 0))
+                # #p1 = mp.Process(target=runSubset(batch, 1))
+                # #p2 = mp.Process(target=runSubset(batch, 2))
+                # #p3 = mp.Process(target=runSubset(batch, 3))
 
-                p0.join()
-                #p1.join()
-                #p2.join()
-                #p3.join()
+                # p0.daemon = True
+                # #p1.daemon = True
+                # #p2.daemon = True
+                # #p3.daemon = True
 
-                p0.terminate()
-                #p1.terminate()
-                #p2.terminate()
-                #p3.terminate()
+                # p0.start()
+                # #p1.start()
+                # #p2.start()
+                # #p3.start()
+
+                # p0.join()
+                # #p1.join()
+                # #p2.join()
+                # #p3.join()
+
+                # p0.terminate()
+                # #p1.terminate()
+                # #p2.terminate()
+                # #p3.terminate()
                 
                 print(len(q))
                 for a in range(len(q)):
