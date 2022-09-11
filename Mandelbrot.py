@@ -1,15 +1,18 @@
 from time import process_time
 import multiprocessing as mp
 import newProcess as np
+from pyglet import image as ImagePyglet
 import pyglet
+from PIL import Image
+import numpy
 
-def map(rangeLow, rangeHigh, newRangeLow, newRangeHigh, measure):
+def newMap(rangeLow, rangeHigh, newRangeLow, newRangeHigh, measure):
     num = ((measure-rangeLow)/(rangeHigh-rangeLow))*(newRangeHigh-newRangeLow)+newRangeLow
     return num
 
 def computeSet(pX, pY, limX1, limX2, limY1, limY2):
-    #c = complex(map(0, w, -2.00, 0.47, pX), map(0, h, -1.12, 1.12, pY))
-    c = complex(map(0, w, limX1, limX2, pX), map(0, h, limY1, limY2, pY))
+    #c = complex(newMap(0, w, -2.00, 0.47, pX), newMap(0, h, -1.12, 1.12, pY))
+    c = complex(newMap(0, w, limX1, limX2, pX), newMap(0, h, limY1, limY2, pY))
     complexFunc = lambda z : z**2 + c
     res = 0 
     iterMax = 64
@@ -17,16 +20,17 @@ def computeSet(pX, pY, limX1, limX2, limY1, limY2):
     while iteration < iterMax and abs(res) <= 2.0: 
         res = complexFunc(res)
         iteration += 1
-    color = map(0, iterMax, 0, 255, iteration)
+    color = newMap(0, iterMax, 0, 255, iteration)
     return color
 
 def runSubset(batch, xSubset):
     processTime = process_time()
-    for pX in range(int(((xSubset*w)/4)), int(((xSubset+1)*w)/4)):
+    for pX in range(int(((xSubset*w)/NUM_PROCESSES)), int(((xSubset+1)*w)/NUM_PROCESSES)):
         for pY in range(0, h):
             col = int(computeSet(pX, pY, x1, x2, y1, y2))
             #arr.append((pX, pY, col))
-            batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))
+            #batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))
+            q.append((pX, pY, col))
     processTime = process_time()-processTime
     print('Process', xSubset, ':', processTime)
 
@@ -37,6 +41,9 @@ x1 = -2.00
 x2 = 0.47
 y1 = -1.12
 y2 = 1.12
+NUM_PROCESSES = 1
+q = []
+d = numpy.zeros((h, w, 3), dtype=numpy.uint8)
 x1Int = x1
 x2Int = x2
 y1Int = y1
@@ -48,11 +55,11 @@ if __name__ == '__main__':
 
     @window.event
     def on_draw():
-        pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1-crosshairLength, y1, x1+crosshairLength, y2)))
-        pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1, y1-crosshairLength, x1, y1+crosshairLength)))
-
-        pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2-crosshairLength, y2, x2+crosshairLength, y2)))
-        pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2, y2-crosshairLength, x2, y2+crosshairLength)))
+        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1-crosshairLength, y1, x1+crosshairLength, y2)))
+        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x1, y1-crosshairLength, x1, y1+crosshairLength)))
+        pass
+        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2-crosshairLength, y2, x2+crosshairLength, y2)))
+        #pyglet.graphics.draw(2, pyglet.gl.GL_LINES, ('v2f', (x2, y2-crosshairLength, x2, y2+crosshairLength)))
 
 
     @window.event
@@ -70,32 +77,46 @@ if __name__ == '__main__':
             batch = pyglet.graphics.Batch()
 
             if __name__ == '__main__':
+                '''with mp.Pool(processes=NUM_PROCESSES) as p:
+                    p.map(runSubset, range(NUM_PROCESSES))'''
+
                 p0 = mp.Process(target=runSubset(batch, 0))
-                p1 = mp.Process(target=runSubset(batch, 1))
-                p2 = mp.Process(target=runSubset(batch, 2))
-                p3 = mp.Process(target=runSubset(batch, 3))
+                #p1 = mp.Process(target=runSubset(batch, 1))
+                #p2 = mp.Process(target=runSubset(batch, 2))
+                #p3 = mp.Process(target=runSubset(batch, 3))
 
                 p0.daemon = True
-                p1.daemon = True
-                p2.daemon = True
-                p3.daemon = True
+                #p1.daemon = True
+                #p2.daemon = True
+                #p3.daemon = True
 
                 p0.start()
-                p1.start()
-                p2.start()
-                p3.start()
+                #p1.start()
+                #p2.start()
+                #p3.start()
 
                 p0.join()
-                p1.join()
-                p2.join()
-                p3.join()
+                #p1.join()
+                #p2.join()
+                #p3.join()
 
                 p0.terminate()
-                p1.terminate()
-                p2.terminate()
-                p3.terminate()
+                #p1.terminate()
+                #p2.terminate()
+                #p3.terminate()
                 
+                print(len(q))
+                for a in range(len(q)):
+                    x = q[a][0]
+                    y = q[a][1]
+                    col = q[a][2]
+                    #batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (x, y)), ('c3B', (col-255),20,20))
+                    d[y, x] = [abs(col-255), 20, 20]
+                tempImage = Image.fromarray(d, mode='RGB')
                 
+                raw = tempImage.tobytes()
+                image = ImagePyglet.ImageData(tempImage.width, tempImage.height, 'RGB', raw)
+                image.blit(0, 0, 0)
             '''for pX in range(0, w):
                 print('progress: ', round((pX/w)*100, 1), '%')
                 for pY in range(0, h):
@@ -103,9 +124,7 @@ if __name__ == '__main__':
                     col = int(computeSet(pX, pY, x1, x2, y1, y2))
                     computeTime = process_time() - computeTime
                     batch.add(1, pyglet.gl.GL_POINTS, None, ('v2f', (pX, pY)), ('c3B', (abs(col-255),20,20)))'''
-
-
-            batch.draw()
+            #batch.draw()
             timeEnd = process_time() - timeStart
             print('Elapsed time: ', timeEnd)
             #print('Elapsed time for computation: ', sumSetComputeTime)
@@ -113,16 +132,16 @@ if __name__ == '__main__':
     def on_mouse_press(x, y, button, modif):
         global x1Int
         global y1Int
-        x1Int = map(0, w, x1, x2, x)
-        y1Int = map(0, h, y1, y2, y)
+        x1Int = newMap(0, w, x1, x2, x)
+        y1Int = newMap(0, h, y1, y2, y)
 
 
     @window.event
     def on_mouse_release(x, y, button, modif):
         global x2Int
         global y2Int
-        x2Int = map(0, w, x1, x2, x)
-        y2Int = map(0, h, y1, y2, y)
+        x2Int = newMap(0, w, x1, x2, x)
+        y2Int = newMap(0, h, y1, y2, y)
 
 
     pyglet.app.run()
